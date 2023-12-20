@@ -36,8 +36,39 @@ find_lb_row_pos <- function(vec_of_lb_params, lb_dataset)
     return(lb_vec)
 }
 
+# function will take in lab parameters and return a vector of the same parameters with a 'U' appended to the end.
+lb_params_u_appended <- function(lb_params)
+{
+    lb_params_u <- c()        
+    for (i in 1:length(lb_params)) {
+        lb_params_u[i] <- paste0(lb_params[i], 'U')
+    }
+    return(lb_params_u)
+}
 
-apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val) 
+lb_params_gen_unit_vector <- function(lb, lb_param_coords)
+{
+    unit_vector <- c()
+    for (i in 1:length(lb_param_coords)) {
+        unit_vector[i] <- lb[[lb_param_coords[i], "LBORRESU"]]
+    }
+    return(unit_vector)
+}
+
+lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
+{
+    for (i in 1:length(unit_vector)) {
+        # create a symbol for the new column name
+        col_name <- sym(lb_params_u[i])
+
+        # use the := operator to assign the value in unit_vector to the new column
+        lb_wide <- mutate(lb_wide, !!col_name := unit_vector[i])
+    }
+    return(lb_wide)
+}
+
+
+apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999) 
 {
     o2 <- FALSE
     o3 <- FALSE
@@ -52,20 +83,25 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val)
         stop("cov_option must be a vector of column names, or o2, o3, or TODO")
     }
 
+    # 
     if (is.vector(cov_option)) {
         # applying filters and then mutating
+        # ASK: would LBCOMPFL always need to be Y? (Thinking that this is complete.)
         lb_filtered <- dplyr::filter(LB, LBCOMPFL == "Y")
         lb_filtered <- dplyr::filter(lb_filtered, LBVST %in% cov_options)
         lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
         lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
 
         # Arrange, group, filter, and ungroup
+        # ASK: select the lab collected immediately prior to first dose
+        # ASK: Is the workflow below the same for all data collected?
         lb_arranged <- dplyr::arrange(lb_filtered, USUBJID, LBPARAMCD, LBDT)
         lb_grouped <- dplyr::group_by(lb_arranged, USUBJID, LBPARAMCD)
         lb_selected <- dplyr::filter(lb_grouped, row_number() == max(row_number()))
         lb <- dplyr::ungroup(lb_selected)
 
         # Select columns and pivot wider, then mutate
+        # ASK: For select here, will these variables vary?
         lb_selected <- dplyr::select(lb, USUBJID, LBPARAMCD, LBORRES)
         lb_wide <- tidyr::pivot_wider(lb_selected, names_from = "LBPARAMCD", values_from = "LBORRES")
         # could create a function that finds the units for each lab value
@@ -74,28 +110,26 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val)
         # find which column ends in u.
         cols_ending_in_u <- grep("U$", colnames(lb))
 
-        # for each lb_param, find the corresponding unit
+        # for each lb_param, find the corresponding unit.
         # create a vector that will be populated with the units.
-        unit_vector <- c()
-        for (i in 1:length(lb_param_coords)) {
-            unit_vector[i] <- lb[[lb_param_coords[i], "LBORRESU"]]
-            # counter <- counter + 1 # mutate takes care of this.
-        }
+        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords)
+        # unit_vector <- c()
+        # for (i in 1:length(lb_param_coords)) {
+        #     unit_vector[i] <- lb[[lb_param_coords[i], "LBORRESU"]]
+        # }
 
-        lb_params_u <- c()        
-          # for all lb_params, append a 'U' to the end.
-        for (i in 1:length(lb_params)) {
-            lb_params_u[i] <- paste0(lb_params[i], 'U')
-        }
+        # for all lb_params, append a 'U' to the end.
+        lb_params_u <- lb_params_u_appended(lb_params)
 
         # now that we have the units, we will mutate lb_wide with the units
-        for (i in 1:length(unit_vector)) {
-            # Create a symbol for the new column name
-            col_name <- sym(lb_params_u[i])
+        lb_wide <- lb_params_append_df(lb_wide, lb_params_u, unit_vector)
+        # for (i in 1:length(unit_vector)) {
+        #     # create a symbol for the new column name
+        #     col_name <- sym(lb_params_u[i])
 
-            # Use the := operator to assign the value in unit_vector to the new column
-            lb_wide <- mutate(lb_wide, !!col_name := unit_vector[i])
-        }
+        #     # use the := operator to assign the value in unit_vector to the new column
+        #     lb_wide <- mutate(lb_wide, !!col_name := unit_vector[i])
+        # }
         
         return(lb_wide)
 
@@ -106,8 +140,20 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val)
     else if (cov_option == "o3") {
         o3 <- TRUE
     } 
+    # time-varying.
+    # ASK: Would this be better named as "time-varying" or something like 't'?
+    else if (cov_option == "o4") {
+        # first, going to filter data.
+        lb_filtered <- dplyr::filter(LB, LBCOMPFL == "Y")
+        lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
+        lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
+
+        # now we are going to select USUBJID
+        # ASK: Is this alway going to be the case??
+        lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT, !!lb_params := LBORRES)
+    }
     else {
-        stop("TODO")
+        stop("cov_option must be a vector of baseline dates, o2, o3, or, o4.")
     }
 }
 
