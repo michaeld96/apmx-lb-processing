@@ -34,10 +34,10 @@ find_lb_row_pos <- function(vec_of_lb_params, lb_dataset)
     for (i in 1:length(vec_of_lb_params)) {
         matches <- which(lb_dataset$LBPARAMCD == vec_of_lb_params[i])
         if (length(matches) > 0) {
-            lb_vec[i] <- matches[1]
+            lb_vec <- append(lb_vec, matches[1])
         }
         else {
-            lb_vec[i] <- NA
+            lb_vec <- append(lb_vec, NA)
         }
     }
     return(lb_vec)
@@ -164,7 +164,23 @@ subject_check_vars <- function(df)
             paste(warn$USUBJID, "has more than one value for a given variable.")
         )
     }
+}
 
+# Time Varying dataset check: this function will check a dataset to see if there is values
+# from the same time point.
+time_varying_check <- function(df)
+{
+    # Group USUBJID and DTIM together to get unique data points.
+    grouped <- dplyr::group_by(df, USUBJID, DTIM)
+
+    # Summarise to count number of values in each group.
+    counts <- dplyr::summarise(grouped, count = n())
+
+    # Filter to see what groups have a count that is greater than 1.
+    dupe_warn <- dplyr::filter(counts, count > 1)
+
+    # Ungroup.
+    dupe_warn_ungroup <- dplyr::ungroup(dupe_warn)
 
     print("DEBUG")
 }
@@ -191,7 +207,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
     if (length(cov_option) > 1) {
         # applying filters and then mutating
         # ASK: would LBCOMPFL always need to be Y? (Thinking that this is complete.)
-        lb_filtered <- dplyr::filter(LB, LBCOMPFL == "Y")
+        lb_filtered <- dplyr::filter(lb, LBCOMPFL == "Y")
         lb_filtered <- dplyr::filter(lb_filtered, LBVST %in% cov_options)
         lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
         lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
@@ -237,7 +253,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
     # ASK: Would this be better named as "time-varying" or something like 't'?
     else if (cov_option == "o4") {
         # first, going to filter data.
-        lb_filtered <- dplyr::filter(LB, LBCOMPFL == "Y")
+        lb_filtered <- dplyr::filter(lb, LBCOMPFL == "Y")
         lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
         lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
 
@@ -247,6 +263,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
         unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords)
         lb_params_u <- lb_params_u_appended(lb_params)
         lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT, !!lb_params := LBORRES)
+        time_varying_check(lb_filtered)
         lb_appended_with_u <- lb_params_append_df(lb_filtered, lb_params_u, unit_vector)
         return(lb_appended_with_u)
     }
@@ -297,4 +314,33 @@ result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
 
 # subject_check_vars(appended_lb)
 # END: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
+
+# START: TESTING TIME-VARYING COVARIETS
+
+lb <- as.data.frame(LB)
+
+new_row <- data.frame(
+    STUDYID = "ABC102",
+    SITEID = 1,
+    USUBJID = "ABC102-01-001",
+    LBCAT = "Serum Biochemistry",
+    LBCOMPFL = "Y",
+    LBDT = "2022-03-13",
+    LBVST = "Screening",
+    VISCRFN = 1,
+    LBTPT = "Pre-dose",
+    LBTPTN = 1,
+    LBPARAMCD = "AST",
+    LBPARAM = "aspartate aminotransferase",
+    LBPARAMN = 15,
+    LBORRES = "34.222",
+    LBORRESC = "34.222",
+    LBORRESU = "U/L"
+)
+
+appended_lb <- rbind(lb, new_row)
+
+ tast <- apmx_lab_processing(appended_lb, "AST", "o4", "-111")
+
+# time_varying_check(appended_lb)
 
