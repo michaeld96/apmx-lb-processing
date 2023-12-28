@@ -19,8 +19,6 @@ library(tidyr)
 
 lb <- as.data.frame(LB)
 
-# lb <- dplyr::filter(LB, LBCOMPFL == "Y") # our function is going to do this.
-
 lb_params <- c("ALB", "AST", "ALT", "BILI", "CREAT")
 
 cov_options <- c("Baseline (D1)", "Screening")
@@ -55,7 +53,7 @@ lb_params_u_appended <- function(lb_params)
     return(lb_params_u)
 }
 
-# Returns the units assoicated with lb parameters.
+# Returns the units associated with lb parameters.
 # lb - data frame.
 # lb_param_coords - row that lb parameter is located.
 lb_params_gen_unit_vector <- function(lb, lb_param_coords)
@@ -83,7 +81,7 @@ lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
 # TODO: TEST!
 warn_missing_data <- function(df) 
 {
-    # Check if 'USUBJID' is a column in the dataframe
+    # Check if 'USUBJID' is a column in the data frame
     if (!"USUBJID" %in% names(df)) {
         stop("The dataframe does not have a 'USUBJID' column.")
     }
@@ -91,7 +89,7 @@ warn_missing_data <- function(df)
     # Iterate over each unique USUBJID
     for (usubjid in unique(df$USUBJID)) 
     {
-        # Subset the dataframe for the current USUBJID
+        # Subset the data frame for the current USUBJID
         df_subset <- df[df$USUBJID == usubjid, ]
         
         # Check each column for missing values
@@ -135,6 +133,42 @@ check_units <- function(df, params, unit_vector)
     }
 }
 
+# Subject-level dataset warnings issued that have more than one value per variable in the same visit.
+# ASK: When we say more than one value per variable, we are talking about the same visit?
+subject_check_vars <- function(df)
+{
+    # group subjects with lab visit and lab parameters.
+    grouped_data <- dplyr::group_by(df, USUBJID, LBVST)
+
+    # Summarize to count distinct lab parameter records for each group.
+    count_params <- dplyr::summarise(
+        grouped_data,
+        each_param_count = n(),
+        unique_param_count = n_distinct(LBPARAMCD)
+    )
+
+    # Filter to find groups with non-unique lab parameter records.
+    non_unique_params <- dplyr::filter(count_params, each_param_count != unique_param_count)
+
+    # Select the groups with non-unique lab parameters.
+    warn <- dplyr::select(
+        non_unique_params,
+        USUBJID,
+        LBVST
+    )
+
+    warn <- ungroup(warn)
+
+    if (nrow(warn) > 0) {
+        warning(
+            paste(warn$USUBJID, "has more than one value for a given variable.")
+        )
+    }
+
+
+    print("DEBUG")
+}
+
 
 
 apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999) 
@@ -176,9 +210,6 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
         lb_wide <- tidyr::pivot_wider(lb_selected, names_from = "LBPARAMCD", values_from = "LBORRES")
         # could create a function that finds the units for each lab value
         lb_param_coords <- find_lb_row_pos(lb_params, lb)
-
-        # find which column ends in u.
-        # cols_ending_in_u <- grep("U$", colnames(lb))
 
         # for each lb_param, find the corresponding unit.
         # create a vector that will be populated with the units.
@@ -238,3 +269,32 @@ result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
 # lb[6,4] <- NA
 
 # apmx_lab_processing(lb, lb_params, cov_options, "-828")
+
+# START: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
+# lb <- as.data.frame(LB)
+# new_row <- data.frame(
+#     STUDYID = "ABC102",
+#     SITEID = 4,
+#     USUBJID = "ABC102-04-008",
+#     LBCAT = "Serum Biochemistry",
+#     LBCOMPFL = "Y",
+#     LBDT = "2022-07-10",
+#     LBVST = "End of Treatment",
+#     VISCRFN = 6,
+#     LBTPT = "Pre-dose",
+#     LBTPTN = 1,
+#     LBPARAMCD = "GGT",
+#     LBPARAM = "gamma glutamyl transferase",
+#     LBPARAMN = 17,
+#     LBORRES = "2.695",
+#     LBORRESC = "2.695",
+#     LBORRESU = "U/L"
+# )
+
+# appended_lb <- rbind(lb, new_row)
+
+# subject_check_vars(lb)
+
+# subject_check_vars(appended_lb)
+# END: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
+
