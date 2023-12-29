@@ -90,23 +90,34 @@ lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
     return(lb_wide)
 }
 
-# TODO: TEST!
 warn_missing_data <- function(df) 
 {
     # Check if 'USUBJID' is a column in the data frame
     if (!"USUBJID" %in% names(df)) {
-        stop("The dataframe does not have a 'USUBJID' column.")
+        stop("The data frame does not have a 'USUBJID' column.")
+    }
+
+    if (!"LBPARAMCD" %in% names(df)) {
+        stop("The data frame does not have a 'LBPARAMCD' column.")
+    }
+
+    # Make temp data frame.
+    df_temp <- df
+
+    if (any(is.na(df_temp$LBPARAMCD))) {
+        positions <- which(is.na(df_temp$LBPARAMCD) & df_temp$LBPARAM == "sodium")
+        for (pos in positions) {
+            df_temp$LBPARAMCD[pos] <- "placeholder_NA"
+        }
     }
     
     # Iterate over each unique USUBJID
-    for (usubjid in unique(df$USUBJID)) 
-    {
+    for (usubjid in unique(df_temp$USUBJID)) {
         # Subset the data frame for the current USUBJID
-        df_subset <- df[df$USUBJID == usubjid, ]
-        
+        df_subset <- df_temp[df_temp$USUBJID == usubjid, ]
+
         # Check each column for missing values
-        for (col in names(df_subset)) 
-        {
+        for (col in names(df_subset)) {
             if (any(is.na(df_subset[[col]]))) {
                 warning(paste("USUBJID", usubjid, "is missing data in column", col))
             }
@@ -214,7 +225,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
 
     # check if any subject is missing data.
     # TODO: TEST
-    # warn_missing_data(lb)
+    warn_missing_data(lb)
 
     if (length(cov_option) > 1) {
         # applying filters and then mutating
@@ -284,46 +295,47 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
     }
 }
 
+lb <- as.data.frame(LB)
 
-# result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
+result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
 # seeing tast.
-# lb <- as.data.frame(LB)
+lb <- as.data.frame(LB)
 
 tast <- apmx_lab_processing(lb, "AST", "o4", "-111")
 
 talt <- apmx_lab_processing(lb, "ALT", "o4", "-111")
 
 # testing the removal a cell.
-# lb[6,4] <- NA
+lb[6,4] <- NA
 
-# apmx_lab_processing(lb, lb_params, cov_options, "-828")
+apmx_lab_processing(lb, lb_params, cov_options, "-828")
 
 # START: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
-# lb <- as.data.frame(LB)
-# new_row <- data.frame(
-#     STUDYID = "ABC102",
-#     SITEID = 4,
-#     USUBJID = "ABC102-04-008",
-#     LBCAT = "Serum Biochemistry",
-#     LBCOMPFL = "Y",
-#     LBDT = "2022-07-10",
-#     LBVST = "End of Treatment",
-#     VISCRFN = 6,
-#     LBTPT = "Pre-dose",
-#     LBTPTN = 1,
-#     LBPARAMCD = "GGT",
-#     LBPARAM = "gamma glutamyl transferase",
-#     LBPARAMN = 17,
-#     LBORRES = "2.695",
-#     LBORRESC = "2.695",
-#     LBORRESU = "U/L"
-# )
+lb <- as.data.frame(LB)
+new_row <- data.frame(
+    STUDYID = "ABC102",
+    SITEID = 4,
+    USUBJID = "ABC102-04-008",
+    LBCAT = "Serum Biochemistry",
+    LBCOMPFL = "Y",
+    LBDT = "2022-07-10",
+    LBVST = "End of Treatment",
+    VISCRFN = 6,
+    LBTPT = "Pre-dose",
+    LBTPTN = 1,
+    LBPARAMCD = "GGT",
+    LBPARAM = "gamma glutamyl transferase",
+    LBPARAMN = 17,
+    LBORRES = "2.695",
+    LBORRESC = "2.695",
+    LBORRESU = "U/L"
+)
 
-# appended_lb <- rbind(lb, new_row)
+appended_lb <- rbind(lb, new_row)
 
-# subject_check_vars(lb)
+subject_check_vars(lb)
 
-# subject_check_vars(appended_lb)
+subject_check_vars(appended_lb)
 # END: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
 
 # START: TESTING TIME-VARYING COVARIETS
@@ -353,5 +365,14 @@ appended_lb <- rbind(lb, new_row)
 
 tast <- apmx_lab_processing(appended_lb, "AST", "o4", "-111")
 
-# time_varying_check(appended_lb)
+time_varying_check(appended_lb)
 
+# END: TESTING TIME-VARYING COVARIETS
+
+
+# START: MISSING DATA
+lb <- as.data.frame(LB) 
+
+lb[2, 7] <- NA
+
+warn_missing_data(lb)
