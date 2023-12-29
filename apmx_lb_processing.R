@@ -29,18 +29,6 @@ lb_vec <- c()
 # function that will find what row each lb_param is in
 find_lb_row_pos <- function(vec_of_lb_params, lb_dataset)
 {
-#   # find which col ends with 'U'.
-#     lb_vec <- c()
-#     for (i in 1:length(vec_of_lb_params)) {
-#         matches <- which(lb_dataset$LBPARAMCD == vec_of_lb_params[i])
-#         if (length(matches) > 0) {
-#             lb_vec <- append(lb_vec, matches[1])
-#         }
-#         else {
-#             lb_vec <- append(lb_vec, NA)
-#         }
-#     }
-#     return(lb_vec)
   # Initialize a list to store the positions
   lb_positions_list <- vector("list", length(vec_of_lb_params))
 
@@ -201,7 +189,12 @@ time_varying_check <- function(df)
     # Ungroup.
     dupe_warn_ungroup <- dplyr::ungroup(dupe_warn)
 
-    print("DEBUG")
+    if (nrow(dupe_warn) > 0) {
+        warning(
+            paste("The following subject(s) have duplicate date times during the same visit:", dupe_warn[[1]], dupe_warn[[2]])
+        )
+    }
+
 }
 
 
@@ -279,7 +272,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
         # now we are going to select USUBJID
         # ASK: Is this alway going to be the case??
         lb_param_coords <- find_lb_row_pos(lb_params, lb)
-        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords)
+        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords, lb_params)
         lb_params_u <- lb_params_u_appended(lb_params)
         lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT, !!lb_params := LBORRES)
         time_varying_check(lb_filtered)
@@ -292,14 +285,13 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
 }
 
 
-result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
-
+# result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
 # seeing tast.
 # lb <- as.data.frame(LB)
 
-# tast <- apmx_lab_processing(lb, "AST", "o4", "-111")
+tast <- apmx_lab_processing(lb, "AST", "o4", "-111")
 
-# talt <- apmx_lab_processing(lb, "ALT", "o4", "-111")
+talt <- apmx_lab_processing(lb, "ALT", "o4", "-111")
 
 # testing the removal a cell.
 # lb[6,4] <- NA
@@ -359,7 +351,7 @@ new_row <- data.frame(
 
 appended_lb <- rbind(lb, new_row)
 
- tast <- apmx_lab_processing(appended_lb, "AST", "o4", "-111")
+tast <- apmx_lab_processing(appended_lb, "AST", "o4", "-111")
 
 # time_varying_check(appended_lb)
 
