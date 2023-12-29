@@ -29,18 +29,31 @@ lb_vec <- c()
 # function that will find what row each lb_param is in
 find_lb_row_pos <- function(vec_of_lb_params, lb_dataset)
 {
-  # find which col ends with 'U'.
-    lb_vec <- c()
-    for (i in 1:length(vec_of_lb_params)) {
-        matches <- which(lb_dataset$LBPARAMCD == vec_of_lb_params[i])
-        if (length(matches) > 0) {
-            lb_vec <- append(lb_vec, matches[1])
-        }
-        else {
-            lb_vec <- append(lb_vec, NA)
-        }
-    }
-    return(lb_vec)
+#   # find which col ends with 'U'.
+#     lb_vec <- c()
+#     for (i in 1:length(vec_of_lb_params)) {
+#         matches <- which(lb_dataset$LBPARAMCD == vec_of_lb_params[i])
+#         if (length(matches) > 0) {
+#             lb_vec <- append(lb_vec, matches[1])
+#         }
+#         else {
+#             lb_vec <- append(lb_vec, NA)
+#         }
+#     }
+#     return(lb_vec)
+  # Initialize a list to store the positions
+  lb_positions_list <- vector("list", length(vec_of_lb_params))
+
+  # Loop through the vector of lab parameters
+  for (i in seq_along(vec_of_lb_params)) {
+    # Find the indices of all matches for the current lab parameter
+    lb_positions_list[[i]] <- which(lb_dataset$LBPARAMCD == vec_of_lb_params[i])
+  }
+
+  # Set the names of the list elements to the lab parameters
+  names(lb_positions_list) <- vec_of_lb_params
+
+  return(lb_positions_list)
 }
 
 # function will take in lab parameters and return a vector of the same parameters with a 'U' appended to the end.
@@ -56,11 +69,22 @@ lb_params_u_appended <- function(lb_params)
 # Returns the units associated with lb parameters.
 # lb - data frame.
 # lb_param_coords - row that lb parameter is located.
-lb_params_gen_unit_vector <- function(lb, lb_param_coords)
+lb_params_gen_unit_vector <- function(lb, lb_param_coords, lb_params)
 {
-    unit_vector <- c()
-    for (i in 1:length(lb_param_coords)) {
-        unit_vector[i] <- lb[[lb_param_coords[i], "LBORRESU"]]
+    unit_vector <- list()
+
+    for (param in lb_params) {
+        coords <- lb_param_coords[[param]]   
+
+        # Initialize an empty vector to store the units
+        units_for_param <- vector("character", length(coords))
+
+        for (j in 1:length(coords)) {
+            units_for_param[j] <- lb[[coords[j], "LBORRESU"]]
+        }
+
+        # Assign the collected units to the corresponding parameter in the unit_vector list
+        unit_vector[[param]] <- units_for_param
     }
     
     return(unit_vector)
@@ -73,7 +97,7 @@ lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
         col_name <- sym(lb_params_u[i])
 
         # use the := operator to assign the value in unit_vector to the new column
-        lb_wide <- mutate(lb_wide, !!col_name := unit_vector[i])
+        lb_wide <- mutate(lb_wide, !!col_name := unit_vector[[i]][1])
     }
     return(lb_wide)
 }
@@ -114,18 +138,13 @@ check_units <- function(df, params, unit_vector)
 
     diff_unit_vars <- c()
 
-    pos_unit_vector <- 1
     for (param in params) {
-        logical_vector <- df$LBPARAMCD == param
-        row_positions <- which(logical_vector)
-        for (pos in row_positions) {
-            if (df$LBORRESU[pos] != unit_vector[pos_unit_vector]) {
-                if (!(param %in% diff_unit_vars)) {
-                    diff_unit_vars <- append(diff_unit_vars, param)
-                }
-            }
+        check <- unit_vector[[param]]
+        all_same <- all(check == check[1])
+        if (!all_same) {
+            diff_unit_vars <- append(diff_unit_vars, param)
         }
-        pos_unit_vector <- pos_unit_vector + 1
+
     }
 
     if (length(diff_unit_vars) != 0) {
@@ -229,7 +248,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
 
         # for each lb_param, find the corresponding unit.
         # create a vector that will be populated with the units.
-        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords)
+        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords, lb_params)
 
         # Checking to see if all units are the same for the variables.
         check_units(lb, lb_params, unit_vector)
