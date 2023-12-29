@@ -162,7 +162,8 @@ subject_check_vars <- function(df)
     count_params <- dplyr::summarise(
         grouped_data,
         each_param_count = n(),
-        unique_param_count = n_distinct(LBPARAMCD)
+        unique_param_count = n_distinct(LBPARAMCD),
+        .groups = "drop"
     )
 
     # Filter to find groups with non-unique lab parameter records.
@@ -192,7 +193,7 @@ time_varying_check <- function(df)
     grouped <- dplyr::group_by(df, USUBJID, DTIM)
 
     # Summarise to count number of values in each group.
-    counts <- dplyr::summarise(grouped, count = n())
+    counts <- dplyr::summarise(grouped, count = n(), .groups = "drop")
 
     # Filter to see what groups have a count that is greater than 1.
     dupe_warn <- dplyr::filter(counts, count > 1)
@@ -224,8 +225,10 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
     }
 
     # check if any subject is missing data.
-    # TODO: TEST
     warn_missing_data(lb)
+
+    # check for duplicate data.
+    subject_check_vars(lb)
 
     if (length(cov_option) > 1) {
         # applying filters and then mutating
@@ -266,11 +269,65 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
         return(lb_wide)
 
     }
+    # Select only day one.
     else if (cov_option == "o2") {
-        stop("o3 is not yet implemented.")
+        lb_filtered <- dplyr::filter(lb, LBCOMPFL == "Y")
+        lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
+        lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
+        # Grab only the LBVSTs that are the baseline.
+        lb_filtered <- dplyr::filter(lb_filtered, LBVST == "Baseline (D1)")
+
+         lb_arranged <- dplyr::arrange(lb_filtered, USUBJID, LBPARAMCD, LBDT)
+        lb_grouped <- dplyr::group_by(lb_arranged, USUBJID, LBPARAMCD)
+        lb_selected <- dplyr::filter(lb_grouped, row_number() == max(row_number()))
+        lb <- dplyr::ungroup(lb_selected)
+
+        lb_selected <- dplyr::select(lb, USUBJID, LBPARAMCD, LBORRES)
+        lb_wide <- tidyr::pivot_wider(lb_selected, names_from = "LBPARAMCD", values_from = "LBORRES")
+        lb_param_coords <- find_lb_row_pos(lb_params, lb)
+
+        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords, lb_params)
+
+        check_units(lb, lb_params, unit_vector)
+
+        lb_params_u <- lb_params_u_appended(lb_params)
+
+        lb_wide <- lb_params_append_df(lb_wide, lb_params_u, unit_vector)
     }
+    # Select only day 1 or  prior.
     else if (cov_option == "o3") {
-        stop("o3 is not yet implemented.")
+        lb_filtered <- dplyr::filter(lb, LBCOMPFL == "Y")
+        lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
+        lb_filtered <- dplyr::mutate(lb_filtered, LBORRES = as.numeric(LBORRES))
+
+        # First, find the unique set of LBVST values
+        unique_visits <- unique(lb_filtered$LBVST)
+        # Find the index of "Baseline (D1)"
+        if ("Baseline (D1)" %in% lb_filtered$LBVST) {
+            baseline_index <- match("Baseline (D1)", unique_visits)
+            lb_filtered <- dplyr::filter(lb_filtered, match(LBVST, unique_visits) <= baseline_index)
+
+        }
+        else {
+            lb_filtered <- dplyr::filter(lb_filtered, LBVST == "Screening")
+        }
+
+        lb_arranged <- dplyr::arrange(lb_filtered, USUBJID, LBPARAMCD, LBDT)
+        lb_grouped <- dplyr::group_by(lb_arranged, USUBJID, LBPARAMCD)
+        lb_selected <- dplyr::filter(lb_grouped, row_number() == max(row_number()))
+        lb <- dplyr::ungroup(lb_selected)
+
+        lb_selected <- dplyr::select(lb, USUBJID, LBPARAMCD, LBORRES)
+        lb_wide <- tidyr::pivot_wider(lb_selected, names_from = "LBPARAMCD", values_from = "LBORRES")
+        lb_param_coords <- find_lb_row_pos(lb_params, lb)
+
+        unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords, lb_params)
+
+        check_units(lb, lb_params, unit_vector)
+
+        lb_params_u <- lb_params_u_appended(lb_params)
+
+        lb_wide <- lb_params_append_df(lb_wide, lb_params_u, unit_vector)
     }
     # time-varying.
     # ASK: Would this be better named as "time-varying" or something like 't'?
@@ -308,7 +365,7 @@ talt <- apmx_lab_processing(lb, "ALT", "o4", "-111")
 # testing the removal a cell.
 lb[6,4] <- NA
 
-apmx_lab_processing(lb, lb_params, cov_options, "-828")
+result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
 
 # START: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
 lb <- as.data.frame(LB)
@@ -336,6 +393,11 @@ appended_lb <- rbind(lb, new_row)
 subject_check_vars(lb)
 
 subject_check_vars(appended_lb)
+
+talt <- apmx_lab_processing(lb, "ALT", "o4", "-111")
+
+result <- apmx_lab_processing(appended_lb, lb_params, cov_options)
+
 # END: TESTING SUBJECT LEVEL WARNINGS FOR DUPE VALUES OF VARIABLES.
 
 # START: TESTING TIME-VARYING COVARIETS
@@ -365,8 +427,6 @@ appended_lb <- rbind(lb, new_row)
 
 tast <- apmx_lab_processing(appended_lb, "AST", "o4", "-111")
 
-time_varying_check(appended_lb)
-
 # END: TESTING TIME-VARYING COVARIETS
 
 
@@ -376,3 +436,21 @@ lb <- as.data.frame(LB)
 lb[2, 7] <- NA
 
 warn_missing_data(lb)
+
+# This will trigger missing data too.
+result <- apmx_lab_processing(lb, lb_params, cov_options, "-828")
+
+# END: TESTING TIME-VARYING COVARIETS
+
+# START: TESTING O2, DAY 1 STUFF
+
+lb <- as.data.frame(LB) 
+
+result <- apmx_lab_processing(lb, lb_params, "o2", "-828")
+# END: TESTING O2, DAY 1 STUFF
+
+# START: TESTING O3, DAY 1 STUFF
+lb <- as.data.frame(LB) 
+
+result <- apmx_lab_processing(lb, lb_params, "o3", "-828")
+# END: TESTING O3, DAY 1 STUFF
