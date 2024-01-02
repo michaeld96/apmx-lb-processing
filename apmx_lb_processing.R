@@ -209,6 +209,32 @@ time_varying_check <- function(df)
 
 }
 
+# TODO: Need to test 
+std_check <- function(df, lb_params)
+{
+    for (col in lb_params) {
+        col_data <- df[[col]]
+
+        col_mean <- mean(col_data, na.rm = TRUE)
+        col_std <- sd(col_data, na.rm = TRUE)
+
+        low_std <- col_mean - 3 * col_std
+        high_std <- col_mean + 3 * col_std
+
+        # Listing all subjects that have are 3 stds away from the mean.
+        outliers <- df$USUBJID[col_data < low_std | col_data > high_std]
+
+        if (length(outliers) != 0) {
+            warning(
+                paste(
+                    "The following subjects", outliers, "have outliers in the following variables", col
+                )
+            )
+        } 
+        
+    }
+}
+
 
 
 apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999) 
@@ -265,6 +291,8 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
 
         # now that we have the units, we will mutate lb_wide with the units
         lb_wide <- lb_params_append_df(lb_wide, lb_params_u, unit_vector)
+
+        std_check(lb_wide, lb_params)
         
         return(lb_wide)
 
@@ -350,7 +378,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
     else {
         stop("cov_option must be a vector of baseline dates, o2, o3, or, o4.")
     }
-}
+} # apmx_lab_processing
 
 lb <- as.data.frame(LB)
 
