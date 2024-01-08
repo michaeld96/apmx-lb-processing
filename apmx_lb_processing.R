@@ -78,6 +78,7 @@ lb_params_gen_unit_vector <- function(lb, lb_param_coords, lb_params)
     return(unit_vector)
 }
 
+# Appends the data frame with the units.
 lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
 {
     for (i in 1:length(unit_vector)) {
@@ -90,6 +91,9 @@ lb_params_append_df <- function(lb_wide, lb_params_u, unit_vector)
     return(lb_wide)
 }
 
+# Checks the data frame for any NA values.
+# Note: Odd side effect of NA for sodium. Seems to be treated as a NA value. Implemented
+#       to correctly handle this behavior.
 warn_missing_data <- function(df) 
 {
     # Check if 'USUBJID' is a column in the data frame
@@ -210,6 +214,8 @@ time_varying_check <- function(df)
 }
 
 # TODO: Need to test 
+# Performs standard deviation of the variables and checks if its mean is 
+# plus or minus 3 standard deviations away; prints warning to user if this is true.
 sd_check <- function(df, lb_params)
 {
     for (col in lb_params) {
