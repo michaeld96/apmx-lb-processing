@@ -1,16 +1,16 @@
 
-#source("apmx_lb_processing.R")
+source("apmx_lb_processing.R")
 
 ##### TEST 1 #####
 # expect fail - fails as intended
-test <- apmx_lab_processing(lb,
-                            lb_params = c("AST", "ALT", "ALB", "BILI", "CREAT"))
+# test <- apmx_lab_processing(lb,
+#                             lb_params = c("AST", "ALT", "ALB", "BILI", "CREAT"))
 
 ##### TEST 2 #####
 # expect fail - fails as intended
-test <- apmx_lab_processing(lb,
-                            lb_params = c("AST", "ALT", "ALB", "BILI", "CREAT"),
-                            cov_option = 1)
+# test <- apmx_lab_processing(lb,
+#                             lb_params = c("AST", "ALT", "ALB", "BILI", "CREAT"),
+#                             cov_option = 1)
 
 #### TEST 3 #####
 # expect success - success!
@@ -26,6 +26,7 @@ test3 <- apmx_lab_processing(lb,
 
 ##### TEST 5 #####
 # expect success - fails :(
+# browser()
 test4 <- apmx_lab_processing(lb,
                              lb_params = c("AST", "ALT", "ALB", "BILI", "CREAT"),
                              cov_option = "o4")
