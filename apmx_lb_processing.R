@@ -245,7 +245,6 @@ sd_check <- function(df, lb_params)
 
 apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999) 
 {
-    browser()
     # check if lb is a dataframe
     if (!is.data.frame(lb)) {
         stop("lb must be a dataframe")
@@ -329,7 +328,7 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
 
         lb_wide <- lb_params_append_df(lb_wide, lb_params_u, unit_vector)
     }
-    # Select only day 1 or  prior.
+    # Select only day 1 or prior.
     else if (cov_option == "o3") {
         lb_filtered <- dplyr::filter(lb, LBCOMPFL == "Y")
         lb_filtered <- dplyr::filter(lb_filtered, LBPARAMCD %in% lb_params)
@@ -378,12 +377,15 @@ apmx_lab_processing <- function(lb, lb_params, cov_option, missing_val = -999)
         unit_vector <- lb_params_gen_unit_vector(lb, lb_param_coords, lb_params)
         lb_params_u <- lb_params_u_appended(lb_params)
         browser()
+
         # FAILURE: ! The LHS of `:=` must be a string, not a character vector.
-        lb_filtered <- dplyr::select(lb_filteredm USUBJID, DTIM = LBDT)
-        for (param in lb_params) {
-            lb_filtered[[param]] <- lb_filtered$LBORRES
-        }
-        # lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT, !!lb_params := LBORRES)
+        # lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT)
+        # for (param in lb_params) {
+        #     lb_filtered[[param]] <- lb_filtered$LBORRES
+        # }
+
+        lb_filtered <- dplyr::select(lb_filtered, USUBJID, DTIM = LBDT, !!lb_params := LBORRES)
+
         time_varying_check(lb_filtered)
         lb_appended_with_u <- lb_params_append_df(lb_filtered, lb_params_u, unit_vector)
         return(lb_appended_with_u)
